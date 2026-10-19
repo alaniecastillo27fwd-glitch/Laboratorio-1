@@ -1,0 +1,358 @@
+{
+  "name": "Laboratorio 1 - Panel de Riesgo de Proveedores con Comprobante QR (POO + n8n)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-manual-trigger",
+      "name": "0. Manual Trigger - Ejecutar Ahora",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1300,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "869e51a9-abb0-423d-b1d9-c73c2652bcb9",
+      "name": "1. Schedule Trigger - Verificar Pagos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1300,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/historial_ejecuciones",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-get-historial",
+      "name": "1B. GET Historial Ejecuciones (JSON Server)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1060,
+        240
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/pagos_pendientes",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "9e925b17-5cba-4077-86f3-c34ef2c86304",
+      "name": "2. GET Pagos Pendientes (JSON Server)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -820,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hacienda.go.cr/fe/ae?identificacion={{ $json.cedulaJuridica }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "b8ed2b19-01c1-4dcc-ac81-653ee6b77cc7",
+      "name": "3. GET Situacion Tributaria (API Hacienda)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -580,
+        240
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * ============================================================================\n * CÓDIGO EXACTO PARA EL NODO CODE DE N8N (RETO 4 INCLUIDO)\n * Nombre del nodo: \"4. Code POO - Evaluar Riesgo y Reglas\"\n * Modo del nodo: \"Run Once for All Items\"\n * ============================================================================\n * Integra las 3 clases en JavaScript puro:\n *  - Proveedor (Regla 1 y Error 1)\n *  - PagoProveedor (Reglas 2, 3, 4, 5 y Error 2)\n *  - HistorialTendencia (Reto 4: Cálculo de tendencia temporal de riesgo)\n * ============================================================================\n */\n\nclass Proveedor {\n  #cedula;\n  #nombre;\n  #estadoTributario;\n  #esMoroso;\n  #esOmiso;\n  #regimen;\n  #administracionTributaria;\n  #apiDisponible;\n  #errorDetalle;\n\n  constructor({ cedula, nombre = 'No especificado', haciendaResponse = null } = {}) {\n    this.#cedula = this.#sanitizarCedula(cedula);\n    this.#nombre = (nombre || 'No especificado').trim();\n    this.#estadoTributario = 'DESCONOCIDO';\n    this.#esMoroso = false;\n    this.#esOmiso = false;\n    this.#regimen = 'No registrado';\n    this.#administracionTributaria = 'No asignada';\n    this.#apiDisponible = true;\n    this.#errorDetalle = null;\n\n    if (haciendaResponse) {\n      this.procesarRespuestaHacienda(haciendaResponse);\n    }\n  }\n\n  #sanitizarCedula(cedula) {\n    if (!cedula) return '';\n    return String(cedula).replace(/[^0-9]/g, '').trim();\n  }\n\n  get cedula() { return this.#cedula; }\n  get nombre() { return this.#nombre; }\n  get estadoTributario() { return this.#estadoTributario; }\n  get esMoroso() { return this.#esMoroso; }\n  get esOmiso() { return this.#esOmiso; }\n  get regimen() { return this.#regimen; }\n  get administracionTributaria() { return this.#administracionTributaria; }\n  get apiDisponible() { return this.#apiDisponible; }\n  get errorDetalle() { return this.#errorDetalle; }\n\n  procesarRespuestaHacienda(res) {\n    if (!res || res.error || res.code === 404 || res.status?.includes?.('no available') || res.statusCode >= 400) {\n      this.#apiDisponible = false;\n      this.#estadoTributario = 'ERROR_CONSULTA_HACIENDA';\n      this.#errorDetalle = res?.message || res?.status || res?.error || 'Proveedor no encontrado o API no disponible';\n      return false;\n    }\n\n    try {\n      if (res.nombre) this.#nombre = res.nombre;\n      if (res.regimen && typeof res.regimen === 'object') {\n        this.#regimen = res.regimen.descripcion || 'Régimen general';\n      } else if (typeof res.regimen === 'string') {\n        this.#regimen = res.regimen;\n      }\n\n      const situacion = res.situacion || {};\n      this.#esMoroso = String(situacion.moroso || '').toUpperCase() === 'SI';\n      this.#esOmiso = String(situacion.omiso || '').toUpperCase() === 'SI';\n      this.#estadoTributario = situacion.estado || 'Desconocido';\n      this.#administracionTributaria = situacion.administracionTributaria || 'No asignada';\n      this.#apiDisponible = true;\n      this.#errorDetalle = null;\n      return true;\n    } catch (err) {\n      this.#apiDisponible = false;\n      this.#estadoTributario = 'ERROR_PARSEO_DATOS';\n      this.#errorDetalle = `Error al interpretar la respuesta de Hacienda: ${err.message}`;\n      return false;\n    }\n  }\n\n  estaEnRiesgo() {\n    if (!this.#apiDisponible) {\n      return {\n        enRiesgo: true,\n        motivos: [`Fallo de comunicación con Hacienda: ${this.#errorDetalle || 'API inaccesible'}`],\n        nivelRiesgo: 'MEDIO'\n      };\n    }\n\n    const motivos = [];\n    if (this.#esMoroso) motivos.push('El proveedor figura como MOROSO ante el Ministerio de Hacienda');\n    if (this.#esOmiso) motivos.push('El proveedor figura como OMISO en declaraciones tributarias');\n    if (this.#estadoTributario.toLowerCase() !== 'inscrito') {\n      motivos.push(`Estado tributario irregular: \"${this.#estadoTributario}\" (Debe ser \"Inscrito\")`);\n    }\n\n    const enRiesgo = motivos.length > 0;\n    let nivelRiesgo = 'BAJO';\n    if (enRiesgo) {\n      nivelRiesgo = (this.#esMoroso || this.#estadoTributario.toLowerCase() !== 'inscrito') ? 'CRITICO' : 'ALTO';\n    }\n\n    return { enRiesgo, motivos, nivelRiesgo };\n  }\n\n  obtenerTasaRetencionBase() {\n    const reg = (this.#regimen || '').toLowerCase();\n    if (reg.includes('simplificado') || reg.includes('no registrado') || reg === '') {\n      return 0.05;\n    }\n    return 0.02;\n  }\n\n  toJSON() {\n    return {\n      cedula: this.#cedula,\n      nombre: this.#nombre,\n      estadoTributario: this.#estadoTributario,\n      esMoroso: this.#esMoroso,\n      esOmiso: this.#esOmiso,\n      regimen: this.#regimen,\n      administracionTributaria: this.#administracionTributaria,\n      apiDisponible: this.#apiDisponible,\n      errorDetalle: this.#errorDetalle\n    };\n  }\n}\n\nclass PagoProveedor {\n  #id;\n  #proveedor;\n  #montoBruto;\n  #moneda;\n  #fechaEmision;\n  #fechaVencimiento;\n  #estadoPago;\n  #nivelRiesgo;\n  #comprobanteQRUrl;\n  #observaciones;\n  #auditoria;\n  #detallesCalculo;\n\n  constructor({\n    id,\n    proveedor,\n    montoBruto,\n    moneda = 'USD',\n    fechaEmision,\n    fechaVencimiento,\n    estadoPago = 'PENDIENTE',\n    nivelRiesgo = null,\n    comprobanteQRUrl = null,\n    observaciones = null\n  } = {}) {\n    this.#id = id ? String(id).trim() : '';\n    this.#proveedor = proveedor instanceof Proveedor ? proveedor : new Proveedor(proveedor);\n    this.#montoBruto = Number(montoBruto);\n    this.#moneda = (moneda || 'USD').toUpperCase();\n    this.#fechaEmision = fechaEmision;\n    this.#fechaVencimiento = fechaVencimiento;\n    this.#estadoPago = estadoPago;\n    this.#nivelRiesgo = nivelRiesgo || 'DESCONOCIDO';\n    this.#comprobanteQRUrl = comprobanteQRUrl || null;\n    this.#observaciones = observaciones || '';\n    this.#auditoria = null;\n    this.#detallesCalculo = {};\n  }\n\n  get id() { return this.#id; }\n  get proveedor() { return this.#proveedor; }\n  get montoBruto() { return this.#montoBruto; }\n  get moneda() { return this.#moneda; }\n  get fechaEmision() { return this.#fechaEmision; }\n  get fechaVencimiento() { return this.#fechaVencimiento; }\n  get estadoPago() { return this.#estadoPago; }\n  get nivelRiesgo() { return this.#nivelRiesgo; }\n  get comprobanteQRUrl() { return this.#comprobanteQRUrl; }\n  get observaciones() { return this.#observaciones; }\n  get auditoria() { return this.#auditoria; }\n  get detallesCalculo() { return { ...this.#detallesCalculo }; }\n\n  validarIntegridadDatos() {\n    const errores = [];\n    if (!this.#id || this.#id.length < 2) errores.push('ID de pago inexistente o inválido');\n    if (isNaN(this.#montoBruto) || this.#montoBruto <= 0) errores.push(`Monto bruto inválido (${this.#montoBruto}). Debe ser mayor a 0`);\n    if (!['USD', 'CRC'].includes(this.#moneda)) errores.push(`Moneda '${this.#moneda}' no admitida`);\n    if (!this.#proveedor.cedula || this.#proveedor.cedula.length < 9) errores.push(`Cédula jurídica/física inválida (${this.#proveedor.cedula || 'vacía'})`);\n    if (!this.#fechaVencimiento || isNaN(Date.parse(this.#fechaVencimiento))) errores.push(`Fecha de vencimiento inválida (${this.#fechaVencimiento})`);\n\n    const valido = errores.length === 0;\n    if (!valido) {\n      this.#estadoPago = 'ERROR_DATOS_INCOMPLETOS';\n      this.#nivelRiesgo = 'CRITICO';\n      this.#observaciones = `Rechazado por validación de datos: ${errores.join('; ')}`;\n    }\n    return { valido, errores };\n  }\n\n  calcularDiasRestantesYVencimiento(fechaReferencia = new Date()) {\n    const ref = new Date(fechaReferencia);\n    const venc = new Date(this.#fechaVencimiento);\n    ref.setHours(0, 0, 0, 0);\n    venc.setHours(0, 0, 0, 0);\n\n    const diferenciaMs = venc.getTime() - ref.getTime();\n    const diasRestantes = Math.round(diferenciaMs / (1000 * 60 * 60 * 24));\n\n    let prioridad = 'NORMAL';\n    let estaVencido = false;\n    let estadoVencimiento = 'EN_PLAZO';\n\n    if (diasRestantes < 0) {\n      prioridad = 'URGENTE';\n      estaVencido = true;\n      estadoVencimiento = 'VENCIDO';\n    } else if (diasRestantes <= 3) {\n      prioridad = 'ALTA';\n      estaVencido = false;\n      estadoVencimiento = 'PROXIMO_A_VENCER';\n    }\n\n    this.#detallesCalculo.diasRestantes = diasRestantes;\n    this.#detallesCalculo.prioridad = prioridad;\n    this.#detallesCalculo.estaVencido = estaVencido;\n    this.#detallesCalculo.estadoVencimiento = estadoVencimiento;\n    return { diasRestantes, prioridad, estaVencido, estadoVencimiento };\n  }\n\n  calcularMontoNetoYRetencion() {\n    const umbralRetencion = this.#moneda === 'CRC' ? 500000 : 1000;\n    const superaUmbral = this.#montoBruto > umbralRetencion;\n\n    let tasaRetencion = 0;\n    if (superaUmbral) {\n      tasaRetencion = this.#proveedor.obtenerTasaRetencionBase();\n    }\n\n    const montoRetencion = Math.round((this.#montoBruto * tasaRetencion) * 100) / 100;\n    const montoNeto = Math.round((this.#montoBruto - montoRetencion) * 100) / 100;\n\n    this.#detallesCalculo.aplicaRetencion = superaUmbral;\n    this.#detallesCalculo.tasaRetencion = tasaRetencion;\n    this.#detallesCalculo.montoRetencion = montoRetencion;\n    this.#detallesCalculo.montoNeto = montoNeto;\n\n    return { aplicaRetencion: superaUmbral, tasaRetencion, montoRetencion, montoNeto };\n  }\n\n  generarPayloadQR(timestamp = Date.now()) {\n    const hashVerificacion = `COMP-${this.#id}-${this.#proveedor.cedula}-${timestamp}`;\n    const fechaActual = new Date().toISOString().split('T')[0];\n\n    const payloadTexto = [\n      `=== COMPROBANTE DE PAGO VALIDADO ===`,\n      `ID PAGO: ${this.#id}`,\n      `PROVEEDOR: ${this.#proveedor.nombre}`,\n      `CEDULA: ${this.#proveedor.cedula}`,\n      `REGIMEN: ${this.#proveedor.regimen}`,\n      `MONTO BRUTO: ${this.#moneda} ${this.#montoBruto.toFixed(2)}`,\n      `RETENCION APLICADA: ${this.#moneda} ${(this.#detallesCalculo.montoRetencion || 0).toFixed(2)} (${this.#detallesCalculo.tasaRetencion ? (this.#detallesCalculo.tasaRetencion * 100).toFixed(0) + '%' : '0%'})`,\n      `MONTO NETO A PAGAR: ${this.#moneda} ${(this.#detallesCalculo.montoNeto || this.#montoBruto).toFixed(2)}`,\n      `ESTADO: ${this.#estadoPago}`,\n      `AUDITORIA: ${this.#auditoria || 'ESTANDAR'}`,\n      `FECHA VALIDACION: ${fechaActual}`,\n      `FIRMA DIGITAL: ${hashVerificacion}`\n    ].join('\\n');\n\n    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payloadTexto)}`;\n    this.#comprobanteQRUrl = qrUrl;\n    this.#detallesCalculo.hashVerificacion = hashVerificacion;\n    this.#detallesCalculo.payloadQR = payloadTexto;\n    return { hashVerificacion, payloadTexto, qrUrl };\n  }\n\n  evaluarDictamenPago(fechaReferencia = new Date()) {\n    const checkDatos = this.validarIntegridadDatos();\n    if (!checkDatos.valido) return this.toJSON();\n\n    if (!this.#proveedor.apiDisponible) {\n      this.#estadoPago = 'PENDIENTE_REINTENTO_API';\n      this.#nivelRiesgo = 'MEDIO';\n      this.#observaciones = `API de Hacienda no disponible o proveedor no localizado: ${this.#proveedor.errorDetalle}`;\n      return this.toJSON();\n    }\n\n    this.calcularDiasRestantesYVencimiento(fechaReferencia);\n\n    const evalRiesgo = this.#proveedor.estaEnRiesgo();\n    if (evalRiesgo.enRiesgo) {\n      this.#estadoPago = 'RETENIDO_REVISION_MANUAL';\n      this.#nivelRiesgo = evalRiesgo.nivelRiesgo;\n      this.#comprobanteQRUrl = null;\n      this.#observaciones = `Pago retenido por riesgo tributario: ${evalRiesgo.motivos.join('; ')}. Prioridad: ${this.#detallesCalculo.prioridad}.`;\n      return this.toJSON();\n    }\n\n    this.calcularMontoNetoYRetencion();\n\n    const limiteAprobacionAutomatica = this.#moneda === 'CRC' ? 5000000 : 10000;\n    const requiereAuditoria = this.#montoBruto > limiteAprobacionAutomatica;\n\n    if (requiereAuditoria) {\n      this.#estadoPago = 'APROBADO_CON_AUDITORIA';\n      this.#auditoria = `REQUIERE_FIRMA_GERENCIAL_POR_MONTO_SUPERIOR_${limiteAprobacionAutomatica}`;\n      this.#observaciones = `Pago aprobado condicionado a doble firma gerencial por superar límite de $10,000 USD (Monto: ${this.#moneda} ${this.#montoBruto.toFixed(2)}). Prioridad: ${this.#detallesCalculo.prioridad}.`;\n    } else {\n      this.#estadoPago = 'APROBADO';\n      this.#auditoria = 'APROBACION_AUTOMATICA';\n      this.#observaciones = `Pago aprobado automáticamente. Proveedor solvente ante Hacienda. Prioridad: ${this.#detallesCalculo.prioridad}.`;\n    }\n\n    this.#nivelRiesgo = 'BAJO';\n    this.generarPayloadQR();\n    return this.toJSON();\n  }\n\n  toUpdatePayload() {\n    return {\n      id: this.#id,\n      proveedorNombre: this.#proveedor.nombre,\n      cedulaJuridica: this.#proveedor.cedula,\n      montoBruto: this.#montoBruto,\n      moneda: this.#moneda,\n      fechaEmision: this.#fechaEmision,\n      fechaVencimiento: this.#fechaVencimiento,\n      estadoPago: this.#estadoPago,\n      nivelRiesgo: this.#nivelRiesgo,\n      comprobanteQRUrl: this.#comprobanteQRUrl,\n      observaciones: this.#observaciones,\n      detallesFiscales: {\n        regimen: this.#proveedor.regimen,\n        estadoTributario: this.#proveedor.estadoTributario,\n        retencionAplicada: this.#detallesCalculo.montoRetencion || 0,\n        montoNeto: this.#detallesCalculo.montoNeto || this.#montoBruto,\n        prioridad: this.#detallesCalculo.prioridad || 'NORMAL',\n        auditoria: this.#auditoria || 'ESTANDAR'\n      }\n    };\n  }\n\n  toJSON() {\n    return {\n      id: this.#id,\n      proveedor: this.#proveedor.toJSON(),\n      montoBruto: this.#montoBruto,\n      moneda: this.#moneda,\n      fechaEmision: this.#fechaEmision,\n      fechaVencimiento: this.#fechaVencimiento,\n      estadoPago: this.#estadoPago,\n      nivelRiesgo: this.#nivelRiesgo,\n      comprobanteQRUrl: this.#comprobanteQRUrl,\n      observaciones: this.#observaciones,\n      auditoria: this.#auditoria,\n      detallesCalculo: this.#detallesCalculo\n    };\n  }\n}\n\nclass HistorialTendencia {\n  #historialPrevio;\n  #resultadosActuales;\n  #metricasActuales;\n  #analisisTendencia;\n\n  constructor(historialPrevio = [], resultadosActuales = []) {\n    this.#historialPrevio = Array.isArray(historialPrevio) ? historialPrevio : [];\n    this.#resultadosActuales = Array.isArray(resultadosActuales) ? resultadosActuales : [];\n    this.#metricasActuales = this.calcularMetricasEjecucionActual();\n    this.#analisisTendencia = this.determinarTendencia();\n  }\n\n  calcularMetricasEjecucionActual() {\n    const total = this.#resultadosActuales.length;\n    if (total === 0) {\n      return {\n        totalProveedoresEvaluados: 0,\n        pagosAprobados: 0,\n        pagosRetenidosOError: 0,\n        porcentajeRiesgoActual: 0,\n        montoTotalEnRiesgo: 0\n      };\n    }\n\n    let aprobados = 0;\n    let retenidosOError = 0;\n    let montoEnRiesgo = 0;\n\n    for (const item of this.#resultadosActuales) {\n      const estado = String(item.estadoPago || '').toUpperCase();\n      const esAprobado = estado === 'APROBADO' ||\n                         estado.includes('APROBADO_CON_FIRMA') ||\n                         estado.includes('APROBADO_CON_AUDITORIA') ||\n                         item.aprobadoParaQR === true;\n\n      if (esAprobado) {\n        aprobados++;\n      } else {\n        retenidosOError++;\n        const monto = Number(item.montoBruto) || 0;\n        if (monto > 0) {\n          montoEnRiesgo += monto;\n        }\n      }\n    }\n\n    const porcentajeRiesgo = Number(((retenidosOError / total) * 100).toFixed(1));\n    const montoTotalEnRiesgo = Number(montoEnRiesgo.toFixed(2));\n\n    return {\n      totalProveedoresEvaluados: total,\n      pagosAprobados: aprobados,\n      pagosRetenidosOError: retenidosOError,\n      porcentajeRiesgoActual: porcentajeRiesgo,\n      montoTotalEnRiesgo\n    };\n  }\n\n  determinarTendencia() {\n    const { porcentajeRiesgoActual } = this.#metricasActuales;\n\n    if (this.#historialPrevio.length === 0) {\n      return {\n        estadoTendencia: 'ESTABLE',\n        porcentajeRiesgoActual,\n        porcentajeRiesgoAnterior: null,\n        diferenciaPuntos: 0,\n        corteAnteriorId: null\n      };\n    }\n\n    const ultimaEjecucion = this.#historialPrevio[this.#historialPrevio.length - 1];\n    const porcentajeRiesgoAnterior = Number(ultimaEjecucion.porcentajeRiesgo ?? ultimaEjecucion.porcentajeRiesgoActual ?? 0);\n    const diferenciaPuntos = Number((porcentajeRiesgoActual - porcentajeRiesgoAnterior).toFixed(1));\n\n    let estadoTendencia = 'ESTABLE';\n    if (diferenciaPuntos < 0) {\n      estadoTendencia = 'MEJORANDO';\n    } else if (diferenciaPuntos > 0) {\n      estadoTendencia = 'EMPEORANDO';\n    }\n\n    return {\n      estadoTendencia,\n      porcentajeRiesgoActual,\n      porcentajeRiesgoAnterior,\n      diferenciaPuntos,\n      corteAnteriorId: ultimaEjecucion.id || 'ANTERIOR'\n    };\n  }\n\n  generarReporteYConclusion() {\n    const { totalProveedoresEvaluados, pagosAprobados, pagosRetenidosOError, porcentajeRiesgoActual, montoTotalEnRiesgo } = this.#metricasActuales;\n    const { estadoTendencia, porcentajeRiesgoAnterior, diferenciaPuntos, corteAnteriorId } = this.#analisisTendencia;\n\n    const fechaISO = new Date().toISOString();\n    const idGenerado = `HIST-${String(this.#historialPrevio.length + 1).padStart(3, '0')}`;\n\n    let conclusionTendencia = '';\n    if (porcentajeRiesgoAnterior === null) {\n      conclusionTendencia = `TENDENCIA ESTABLE: Primera ejecución registrada con un ${porcentajeRiesgoActual}% de pagos en riesgo (${pagosRetenidosOError} de ${totalProveedoresEvaluados}). Se establece línea base para futuras mediciones.`;\n    } else if (estadoTendencia === 'MEJORANDO') {\n      conclusionTendencia = `La situación está MEJORANDO: el porcentaje de pagos en riesgo bajó de ${porcentajeRiesgoAnterior}% a ${porcentajeRiesgoActual}% (${diferenciaPuntos} pts) respecto al corte anterior (${corteAnteriorId}).`;\n    } else if (estadoTendencia === 'EMPEORANDO') {\n      conclusionTendencia = `La situación está EMPEORANDO: el porcentaje de pagos en riesgo aumentó de ${porcentajeRiesgoAnterior}% a ${porcentajeRiesgoActual}% (+${diferenciaPuntos} pts) respecto al corte anterior (${corteAnteriorId}).`;\n    } else {\n      conclusionTendencia = `La situación se mantiene ESTABLE: el porcentaje de riesgo se mantuvo exactamente en ${porcentajeRiesgoActual}% respecto al corte anterior (${corteAnteriorId}).`;\n    }\n\n    const registroHistorialActual = {\n      id: idGenerado,\n      fechaEjecucion: fechaISO,\n      totalProveedoresEvaluados,\n      pagosAprobados,\n      pagosRetenidosOError,\n      porcentajeRiesgo: porcentajeRiesgoActual,\n      montoTotalEnRiesgo,\n      estadoTendencia,\n      conclusionTendencia\n    };\n\n    return {\n      registroHistorialActual,\n      conclusionTendencia,\n      estadoTendencia,\n      porcentajeRiesgoActual,\n      porcentajeRiesgoHistorico: porcentajeRiesgoAnterior\n    };\n  }\n}\n\n// ============================================================================\n// INTEGRACIÓN DEL NODO CODE CON EL FLUJO DE N8N\n// ============================================================================\n\n// 1. Obtener historial previo desde el nodo GET Historial Ejecuciones (si existe)\nlet historialPrevio = [];\ntry {\n  historialPrevio = $('1B. GET Historial Ejecuciones (JSON Server)').all().map(item => item.json);\n} catch (e) {\n  try {\n    historialPrevio = $('GET Historial Ejecuciones').all().map(item => item.json);\n  } catch (e2) {\n    historialPrevio = [];\n  }\n}\n\n// 2. Obtener pagos de origen y respuestas de Hacienda\nconst itemsHacienda = $input.all();\nlet itemsPagosOrigen = [];\n\ntry {\n  itemsPagosOrigen = $('2. GET Pagos Pendientes (JSON Server)').all();\n} catch (e) {\n  try {\n    itemsPagosOrigen = $('Consultar Pagos Pendientes').all();\n  } catch (e2) {\n    itemsPagosOrigen = itemsHacienda;\n  }\n}\n\n// 3. Procesar individualmente cada pago mediante las clases Proveedor y PagoProveedor\nconst resultadosLote = [];\n\nfor (let i = 0; i < itemsPagosOrigen.length; i++) {\n  const pagoItem = itemsPagosOrigen[i]?.json || {};\n  const haciendaItem = itemsHacienda[i]?.json || null;\n\n  const proveedor = new Proveedor({\n    cedula: pagoItem.cedulaJuridica,\n    nombre: pagoItem.proveedorNombre,\n    haciendaResponse: haciendaItem\n  });\n\n  const pago = new PagoProveedor({\n    id: pagoItem.id,\n    proveedor: proveedor,\n    montoBruto: pagoItem.montoBruto,\n    moneda: pagoItem.moneda,\n    fechaEmision: pagoItem.fechaEmision,\n    fechaVencimiento: pagoItem.fechaVencimiento,\n    estadoPago: pagoItem.estadoPago,\n    nivelRiesgo: pagoItem.nivelRiesgo,\n    comprobanteQRUrl: pagoItem.comprobanteQRUrl,\n    observaciones: pagoItem.observaciones\n  });\n\n  pago.evaluarDictamenPago();\n  resultadosLote.push(pago.toUpdatePayload());\n}\n\n// 4. Instanciar HistorialTendencia para analizar la evolución temporal del riesgo\nconst evaluadorTendencia = new HistorialTendencia(historialPrevio, resultadosLote);\nconst reporteTendencia = evaluadorTendencia.generarReporteYConclusion();\n\n// 5. Adjuntar los datos de tendencia a cada ítem emitido para n8n\nconst resultadosFinales = resultadosLote.map((item, idx) => {\n  return {\n    json: {\n      ...item,\n      // Campos requeridos por el Reto 4:\n      estadoTendencia: reporteTendencia.estadoTendencia,\n      porcentajeRiesgoActual: reporteTendencia.porcentajeRiesgoActual,\n      porcentajeRiesgoHistorico: reporteTendencia.porcentajeRiesgoHistorico,\n      conclusionTendencia: reporteTendencia.conclusionTendencia,\n      registroHistorialActual: reporteTendencia.registroHistorialActual,\n      // Indicador booleano para el nodo IF\n      aprobadoParaQR: item.estadoPago.startsWith('APROBADO')\n    }\n  };\n});\n\nreturn resultadosFinales;\n"
+      },
+      "id": "4cf72aef-87bc-4c05-9bf1-3ae825cf0893",
+      "name": "4. Code POO - Evaluar Riesgo y Reglas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-aprobado-qr-01",
+              "leftValue": "={{ $json.aprobadoParaQR }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f5eb520a-21bc-47e1-92c0-2f1dc2a0fbf1",
+      "name": "5. IF - ¿Pago Aprobado para QR?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -60,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ encodeURIComponent($json.qrPayloadTexto || $json.comprobanteQRUrl) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "26765b9f-22db-43e7-a174-7a512238aced",
+      "name": "6A. GET Generar Comprobante QR (api.qrserver.com)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://localhost:3000/pagos_pendientes/{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"estadoPago\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.estadoPago }}\",\n  \"nivelRiesgo\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.nivelRiesgo }}\",\n  \"retencion\": {{ $('5. IF - ¿Pago Aprobado para QR?').item.json.retencion }},\n  \"montoNeto\": {{ $('5. IF - ¿Pago Aprobado para QR?').item.json.montoNeto }},\n  \"prioridad\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.prioridad }}\",\n  \"codigoComprobante\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.codigoComprobante }}\",\n  \"comprobanteQRUrl\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.comprobanteQRUrl }}\",\n  \"observaciones\": \"{{ $('5. IF - ¿Pago Aprobado para QR?').item.json.observaciones }}\",\n  \"detallesFiscales\": {{ JSON.stringify($('5. IF - ¿Pago Aprobado para QR?').item.json.detallesFiscales) }}\n}",
+        "options": {}
+      },
+      "id": "cbb9a2b9-141b-48a1-bec7-08e07b26508a",
+      "name": "6B. PATCH Actualizar Pago Aprobado (JSON Server)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        120
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://localhost:3000/pagos_pendientes/{{ $json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"estadoPago\": \"{{ $json.estadoPago }}\",\n  \"nivelRiesgo\": \"{{ $json.nivelRiesgo }}\",\n  \"retencion\": {{ $json.retencion }},\n  \"montoNeto\": {{ $json.montoNeto }},\n  \"prioridad\": \"{{ $json.prioridad }}\",\n  \"codigoComprobante\": null,\n  \"comprobanteQRUrl\": null,\n  \"observaciones\": \"{{ $json.observaciones }}\",\n  \"detallesFiscales\": {{ JSON.stringify($json.detallesFiscales) }}\n}",
+        "options": {}
+      },
+      "id": "dd6ee51e-ecdd-4043-8ac5-4e56f18cbb70",
+      "name": "6C. PATCH Retener o Registrar Error (JSON Server)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        360
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Consolidar registro de historial y conclusión final (Reto 4)\nconst itemReferencia = $('4. Code POO - Evaluar Riesgo y Reglas').first();\nconst registroHistorial = itemReferencia.json.registroHistorialActual;\nconst conclusion = itemReferencia.json.conclusionTendencia;\n\nreturn [{\n  json: {\n    ...registroHistorial,\n    resumenLote: {\n      totalEvaluados: registroHistorial.totalProveedoresEvaluados,\n      aprobados: registroHistorial.pagosAprobados,\n      retenidosOError: registroHistorial.pagosRetenidosOError,\n      tasaRiesgo: registroHistorial.porcentajeRiesgo + '%',\n      montoTotalEnRiesgoUSD: registroHistorial.montoTotalEnRiesgo\n    },\n    dictamenTendencia: registroHistorial.estadoTendencia,\n    conclusionEjecutiva: conclusion\n  }\n}];"
+      },
+      "id": "node-consolidar-resumen",
+      "name": "7A. Consolidar Resumen de Tendencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/historial_ejecuciones",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": \"{{ $json.id }}\",\n  \"fechaEjecucion\": \"{{ $json.fechaEjecucion }}\",\n  \"totalProveedoresEvaluados\": {{ $json.totalProveedoresEvaluados }},\n  \"pagosAprobados\": {{ $json.pagosAprobados }},\n  \"pagosRetenidosOError\": {{ $json.pagosRetenidosOError }},\n  \"porcentajeRiesgo\": {{ $json.porcentajeRiesgo }},\n  \"montoTotalEnRiesgo\": {{ $json.montoTotalEnRiesgo }},\n  \"estadoTendencia\": \"{{ $json.estadoTendencia }}\",\n  \"conclusionTendencia\": \"{{ $json.conclusionTendencia }}\"\n}",
+        "options": {}
+      },
+      "id": "node-post-historial",
+      "name": "7B. POST Guardar Historial (JSON Server)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        240
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "0. Manual Trigger - Ejecutar Ahora": {
+      "main": [
+        [
+          {
+            "node": "1B. GET Historial Ejecuciones (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Schedule Trigger - Verificar Pagos": {
+      "main": [
+        [
+          {
+            "node": "1B. GET Historial Ejecuciones (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1B. GET Historial Ejecuciones (JSON Server)": {
+      "main": [
+        [
+          {
+            "node": "2. GET Pagos Pendientes (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. GET Pagos Pendientes (JSON Server)": {
+      "main": [
+        [
+          {
+            "node": "3. GET Situacion Tributaria (API Hacienda)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. GET Situacion Tributaria (API Hacienda)": {
+      "main": [
+        [
+          {
+            "node": "4. Code POO - Evaluar Riesgo y Reglas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Code POO - Evaluar Riesgo y Reglas": {
+      "main": [
+        [
+          {
+            "node": "5. IF - ¿Pago Aprobado para QR?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. IF - ¿Pago Aprobado para QR?": {
+      "main": [
+        [
+          {
+            "node": "6A. GET Generar Comprobante QR (api.qrserver.com)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6C. PATCH Retener o Registrar Error (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6A. GET Generar Comprobante QR (api.qrserver.com)": {
+      "main": [
+        [
+          {
+            "node": "6B. PATCH Actualizar Pago Aprobado (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6B. PATCH Actualizar Pago Aprobado (JSON Server)": {
+      "main": [
+        [
+          {
+            "node": "7A. Consolidar Resumen de Tendencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6C. PATCH Retener o Registrar Error (JSON Server)": {
+      "main": [
+        [
+          {
+            "node": "7A. Consolidar Resumen de Tendencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7A. Consolidar Resumen de Tendencia": {
+      "main": [
+        [
+          {
+            "node": "7B. POST Guardar Historial (JSON Server)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "CUWXsiYAWklo8Tir"
+}

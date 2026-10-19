@@ -1,0 +1,28 @@
+{
+  "name": "laboratorio-poo-n8n-riesgo-proveedores",
+  "version": "1.0.0",
+  "description": "Laboratorio #1: Soluciones de Negocio (POO + n8n) - Panel de riesgo de proveedores con comprobante QR",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node main.js",
+    "test": "node main.js",
+    "server": "npx json-server db.json -p 3000 -s .",
+    "reset-db": "node reset-db.js",
+    "simulate": "node test-workflow-logic.js",
+    "fix-n8n": "node fix-n8n-workflow.js && node sync-export.js"
+  },
+  "keywords": [
+    "poo",
+    "n8n",
+    "javascript",
+    "hacienda",
+    "qr",
+    "business-logic"
+  ],
+  "author": "Arquitecto de Software & Automatización",
+  "license": "ISC",
+  "dependencies": {
+    "json-server": "^0.17.4"
+  }
+}

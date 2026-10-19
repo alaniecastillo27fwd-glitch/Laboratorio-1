@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Riesgo de Proveedores &amp; Tendencia | POO + n8n</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --bg-card: rgba(18, 24, 38, 0.75);
+      --bg-card-hover: rgba(26, 34, 54, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(99, 102, 241, 0.5);
+      
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --accent: #06b6d4;
+      --n8n-orange: #ff6d5a;
+
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      --font-main: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(255, 109, 90, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      line-height: 1.5;
+      padding-bottom: 60px;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 32px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 26px;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #ff6d5a, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 8px 20px -4px rgba(255, 109, 90, 0.4);
+    }
+
+    .brand-titles h1 {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-titles p {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .badge-tag {
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .badge-tag.reto4 {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-full);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    .status-dot.n8n {
+      background: var(--n8n-orange);
+      box-shadow: 0 0 10px var(--n8n-orange);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+
+    .btn-n8n {
+      background: linear-gradient(135deg, #ff6d5a, #ea580c);
+      color: #ffffff;
+      box-shadow: 0 6px 18px -4px rgba(255, 109, 90, 0.4);
+    }
+
+    .btn-n8n:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px -4px rgba(255, 109, 90, 0.6);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #ffffff;
+      box-shadow: 0 6px 18px -4px var(--primary-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px -4px var(--primary-glow);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    /* Tendencia Card (Reto 4) */
+    .trend-hero {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(99, 102, 241, 0.1));
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .trend-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .trend-badge-large {
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trend-badge-large.MEJORANDO {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+
+    .trend-badge-large.EMPEORANDO {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+    }
+
+    .trend-badge-large.ESTABLE {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .trend-info h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .trend-info p {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 720px;
+    }
+
+    .trend-stat-box {
+      display: flex;
+      gap: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px 18px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+    }
+
+    .t-stat {
+      text-align: center;
+    }
+
+    .t-stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .t-stat-val {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: #fff;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 26px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent-gradient, #6366f1);
+    }
+
+    .metric-card.c-total { --accent-gradient: linear-gradient(90deg, #6366f1, #a855f7); }
+    .metric-card.c-aprobados { --accent-gradient: linear-gradient(90deg, #10b981, #06b6d4); }
+    .metric-card.c-retenidos { --accent-gradient: linear-gradient(90deg, #ef4444, #f97316); }
+    .metric-card.c-errores { --accent-gradient: linear-gradient(90deg, #f59e0b, #eab308); }
+    .metric-card.c-monto { --accent-gradient: linear-gradient(90deg, #06b6d4, #3b82f6); }
+    .metric-card.c-retencion { --accent-gradient: linear-gradient(90deg, #ec4899, #f43f5e); }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
+    /* Section Tabs */
+    .view-toggle {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    /* Table Container */
+    .table-container {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 24px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: rgba(10, 15, 28, 0.7);
+      padding: 14px 18px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .id-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.12);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .provider-name { font-weight: 600; color: var(--text-main); }
+    .provider-id { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+    .amount-cell { font-family: var(--font-mono); font-weight: 600; }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-aprobado { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .status-auditoria { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .status-retenido { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .status-error { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-pendiente { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3); }
+
+    .qr-thumb-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: #22d3ee;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Modal QR */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 8, 16, 0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal-box {
+      background: #111827;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      max-width: 520px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .qr-image-wrapper {
+      background: #fff;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      margin: 0 auto 16px;
+      display: inline-block;
+    }
+
+    .modal-details {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      max-height: 140px;
+      overflow-y: auto;
+      text-align: left;
+      white-space: pre-wrap;
+      margin-bottom: 16px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--primary);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      font-size: 13px;
+      display: none;
+      z-index: 1100;
+    }
+
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="header-brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-titles">
+          <h1>Panel de Riesgo de Proveedores &amp; Análisis de Tendencia</h1>
+          <p>
+            Laboratorio #1: POO en JavaScript puro + n8n
+            <span class="badge-tag">Hacienda CR</span>
+            <span class="badge-tag">QR Server</span>
+            <span class="badge-tag reto4">Reto 4: Historial &amp; Tendencia</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-pill">
+          <span class="status-dot active" id="dot-json-server"></span>
+          <span>JSON Server: <strong id="txt-json-server">Conectado (3000)</strong></span>
+        </div>
+
+        <a href="http://localhost:5678/workflow/CUWXsiYAWklo8Tir" target="_blank" class="btn btn-n8n">
+          <span>Abrir Workflow en n8n</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        </a>
+
+        <button class="btn btn-primary" id="btn-evaluar-poo">
+          <span>⚡ Ejecutar Motor POO + Reto 4</span>
+        </button>
+
+        <button class="btn btn-secondary" id="btn-reset-db">
+          <span>🔄 Reiniciar DB</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Reto 4 Hero: Tendencia Temporal -->
+    <div class="trend-hero">
+      <div class="trend-left">
+        <div class="trend-badge-large MEJORANDO" id="trend-badge">
+          <span id="trend-icon">📈</span>
+          <span id="trend-status">MEJORANDO</span>
+        </div>
+        <div class="trend-info">
+          <h3>Evolución Temporal del Riesgo Tributario (Reto 4)</h3>
+          <p id="trend-conclusion">Cargando análisis comparativo de ejecuciones...</p>
+        </div>
+      </div>
+
+      <div class="trend-stat-box">
+        <div class="t-stat">
+          <div class="t-stat-label">Corte Previo</div>
+          <div class="t-stat-val" id="t-previo-val" style="color: #94a3b8;">66.7%</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-label">Lote Actual</div>
+          <div class="t-stat-val" id="t-actual-val" style="color: #34d399;">57.1%</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-label">Variación</div>
+          <div class="t-stat-val" id="t-diff-val" style="color: #34d399;">-9.6 pts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics Grid -->
+    <div class="metrics-grid">
+      <div class="metric-card c-total">
+        <div class="metric-label">Facturas del Lote</div>
+        <div class="metric-value" id="m-total">0</div>
+        <div class="metric-sub">Evaluadas en la corrida</div>
+      </div>
+      <div class="metric-card c-aprobados">
+        <div class="metric-label">Aprobados con QR</div>
+        <div class="metric-value" id="m-aprobados" style="color: #10b981;">0</div>
+        <div class="metric-sub">Solventes ante Hacienda</div>
+      </div>
+      <div class="metric-card c-retenidos">
+        <div class="metric-label">Retenidos por Riesgo</div>
+        <div class="metric-value" id="m-retenidos" style="color: #ef4444;">0</div>
+        <div class="metric-sub">Morosos / Omisos</div>
+      </div>
+      <div class="metric-card c-errores">
+        <div class="metric-label">Errores / Reintentos</div>
+        <div class="metric-value" id="m-errores" style="color: #f59e0b;">0</div>
+        <div class="metric-sub">API o Datos corruptos</div>
+      </div>
+      <div class="metric-card c-monto">
+        <div class="metric-label">Desembolso Neto Aprobado</div>
+        <div class="metric-value" id="m-desembolso" style="color: #38bdf8;">$0</div>
+        <div class="metric-sub">Total líquido a transferir</div>
+      </div>
+      <div class="metric-card c-retencion">
+        <div class="metric-label">Retenciones Fiscales</div>
+        <div class="metric-value" id="m-retenciones" style="color: #f43f5e;">$0</div>
+        <div class="metric-sub">2% General / 5% Simplif.</div>
+      </div>
+    </div>
+
+    <!-- View Toggles -->
+    <div class="view-toggle">
+      <button class="tab-btn active" id="tab-pagos">📋 Pagos de Proveedores del Lote</button>
+      <button class="tab-btn" id="tab-historial">📊 Historial de Ejecuciones Registradas (<span id="count-historial">3</span>)</button>
+    </div>
+
+    <!-- Table 1: Pagos Pendientes / Procesados -->
+    <div class="table-container" id="container-pagos">
+      <table>
+        <thead>
+          <tr>
+            <th>ID Pago</th>
+            <th>Proveedor &amp; Cédula</th>
+            <th>Monto Bruto</th>
+            <th>Retención / Neto</th>
+            <th>Vencimiento / Prioridad</th>
+            <th>Estado &amp; Riesgo</th>
+            <th>Comprobante QR</th>
+            <th>Observaciones de Negocio</th>
+          </tr>
+        </thead>
+        <tbody id="pagos-tbody">
+          <tr><td colspan="8" style="text-align: center; padding: 30px;">Cargando pagos...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table 2: Historial de Ejecuciones (Reto 4) -->
+    <div class="table-container" id="container-historial" style="display: none;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID Corrida</th>
+            <th>Fecha y Hora</th>
+            <th>Total Evaluados</th>
+            <th>Aprobados</th>
+            <th>Retenidos / Error</th>
+            <th>Tasa de Riesgo</th>
+            <th>Monto en Riesgo</th>
+            <th>Tendencia</th>
+            <th>Conclusión Ejecutiva</th>
+          </tr>
+        </thead>
+        <tbody id="historial-tbody">
+          <tr><td colspan="9" style="text-align: center; padding: 30px;">Cargando historial de ejecuciones...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal Comprobante QR -->
+  <div class="modal-backdrop" id="qr-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 style="font-size: 18px; color: #fff;">Comprobante Fiscal de Pago (QR)</h2>
+        <button class="modal-close" id="modal-close-btn">&times;</button>
+      </div>
+      <div style="text-align: center;">
+        <div class="qr-image-wrapper">
+          <img id="modal-qr-img" src="" alt="Comprobante QR" style="width: 220px; height: 220px; display: block;">
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          Escanee el código con su teléfono celular para validar la firma y datos fiscales en vivo.
+        </p>
+        <div class="modal-details" id="modal-qr-text"></div>
+        <a id="modal-qr-link" href="#" target="_blank" class="btn btn-primary" style="width: 100%; justify-content: center;">
+          Abrir Imagen en Alta Resolución
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast-msg">Notificación</div>
+
+  <!-- Lógica POO ES6+ (Sin Frameworks) -->
+  <script type="module">
+    import { Proveedor } from './classes/Proveedor.js';
+    import { PagoProveedor } from './classes/PagoProveedor.js';
+    import { HistorialTendencia } from './classes/HistorialTendencia.js';
+
+    let listaPagos = [];
+    let listaHistorial = [];
+
+    const pagosTbody = document.getElementById('pagos-tbody');
+    const historialTbody = document.getElementById('historial-tbody');
+    const toast = document.getElementById('toast-msg');
+    const qrModal = document.getElementById('qr-modal');
+
+    function mostrarToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    async function cargarDatos() {
+      try {
+        const [resPagos, resHistorial] = await Promise.all([
+          fetch('http://localhost:3000/pagos_pendientes'),
+          fetch('http://localhost:3000/historial_ejecuciones')
+        ]);
+
+        listaPagos = await resPagos.json();
+        listaHistorial = await resHistorial.json();
+
+        document.getElementById('count-historial').textContent = listaHistorial.length;
+        renderizarPagos();
+        renderizarHistorial();
+        actualizarMetricas();
+        actualizarHeroTendencia();
+      } catch (e) {
+        pagosTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #ef4444; padding: 30px;">Error al conectar con JSON Server (puerto 3000).</td></tr>`;
+      }
+    }
+
+    function renderizarPagos() {
+      if (listaPagos.length === 0) {
+        pagosTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 30px;">No hay pagos registrados.</td></tr>`;
+        return;
+      }
+
+      pagosTbody.innerHTML = listaPagos.map(p => {
+        const estado = p.estadoPago || 'PENDIENTE';
+        let claseEstado = 'status-pendiente';
+        if (estado === 'APROBADO') claseEstado = 'status-aprobado';
+        else if (estado.includes('APROBADO_CON')) claseEstado = 'status-auditoria';
+        else if (estado.includes('RETENIDO')) claseEstado = 'status-retenido';
+        else if (estado.includes('ERROR') || estado.includes('REINTENTO')) claseEstado = 'status-error';
+
+        const ret = p.detallesFiscales?.retencionAplicada ?? p.retencion ?? 0;
+        const neto = p.detallesFiscales?.montoNeto ?? p.montoNeto ?? p.montoBruto;
+
+        return `
+          <tr>
+            <td><span class="id-tag">${p.id || 'N/A'}</span></td>
+            <td>
+              <div class="provider-name">${p.proveedorNombre || 'Desconocido'}</div>
+              <div class="provider-id">Cédula: ${p.cedulaJuridica || 'Sin cédula'}</div>
+            </td>
+            <td><div class="amount-cell">${p.moneda || 'USD'} ${Number(p.montoBruto || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div></td>
+            <td>
+              <div class="amount-cell" style="color: #38bdf8;">Neto: $${Number(neto).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              <div style="font-size: 11px; color: #f43f5e;">Retención: $${Number(ret).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+            </td>
+            <td>
+              <div style="font-size: 11px; color: var(--text-dim);">${p.fechaVencimiento || 'N/A'}</div>
+              <span class="status-badge" style="background: rgba(255,255,255,0.06); font-size: 10px;">${p.prioridad || p.detallesFiscales?.prioridad || 'NORMAL'}</span>
+            </td>
+            <td>
+              <span class="status-badge ${claseEstado}">● ${estado}</span>
+              <div style="font-size: 10px; color: var(--text-dim); margin-top: 3px;">Riesgo: <strong>${p.nivelRiesgo || 'N/A'}</strong></div>
+            </td>
+            <td>
+              ${p.comprobanteQRUrl ? `
+                <button class="qr-thumb-btn" data-qr="${encodeURIComponent(p.comprobanteQRUrl)}">
+                  <span>📱 Ver QR</span>
+                </button>
+              ` : `<span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Sin QR</span>`}
+            </td>
+            <td style="max-width: 280px; font-size: 11px; color: var(--text-muted);">${p.observaciones || 'Sin observaciones.'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.querySelectorAll('.qr-thumb-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const qrUrl = decodeURIComponent(btn.getAttribute('data-qr'));
+          document.getElementById('modal-qr-img').src = qrUrl;
+          document.getElementById('modal-qr-link').href = qrUrl;
+          try {
+            const urlObj = new URL(qrUrl);
+            document.getElementById('modal-qr-text').textContent = urlObj.searchParams.get('data') || '';
+          } catch(e) {}
+          qrModal.classList.add('open');
+        });
+      });
+    }
+
+    function renderizarHistorial() {
+      if (listaHistorial.length === 0) {
+        historialTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 30px;">No hay ejecuciones históricas guardadas.</td></tr>`;
+        return;
+      }
+
+      historialTbody.innerHTML = [...listaHistorial].reverse().map(h => {
+        let claseTendencia = 'status-aprobado';
+        if (h.estadoTendencia === 'EMPEORANDO') claseTendencia = 'status-retenido';
+        else if (h.estadoTendencia === 'ESTABLE') claseTendencia = 'status-error';
+
+        return `
+          <tr>
+            <td><span class="id-tag">${h.id}</span></td>
+            <td style="font-family: var(--font-mono); font-size: 11px;">${h.fechaEjecucion?.substring(0, 19).replace('T', ' ')}</td>
+            <td style="font-weight: 600;">${h.totalProveedoresEvaluados}</td>
+            <td style="color: #10b981; font-weight: 600;">${h.pagosAprobados}</td>
+            <td style="color: #ef4444; font-weight: 600;">${h.pagosRetenidosOError}</td>
+            <td style="font-family: var(--font-mono); font-weight: 700; color: #fff;">${h.porcentajeRiesgo}%</td>
+            <td style="font-family: var(--font-mono);">$${Number(h.montoTotalEnRiesgo || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+            <td><span class="status-badge ${claseTendencia}">${h.estadoTendencia}</span></td>
+            <td style="font-size: 11px; color: var(--text-muted); max-width: 320px;">${h.conclusionTendencia}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function actualizarHeroTendencia() {
+      const analizador = new HistorialTendencia(listaHistorial, listaPagos);
+      const reporte = analizador.generarReporteYConclusion();
+      const analisis = analizador.analisisTendencia;
+
+      const badge = document.getElementById('trend-badge');
+      badge.className = `trend-badge-large ${reporte.estadoTendencia}`;
+      document.getElementById('trend-status').textContent = reporte.estadoTendencia;
+      document.getElementById('trend-icon').textContent = reporte.estadoTendencia === 'MEJORANDO' ? '📉' : (reporte.estadoTendencia === 'EMPEORANDO' ? '📈' : '➡️');
+      document.getElementById('trend-conclusion').textContent = reporte.conclusionTendencia;
+
+      document.getElementById('t-previo-val').textContent = analisis.porcentajeRiesgoAnterior !== null ? `${analisis.porcentajeRiesgoAnterior}%` : 'N/A';
+      document.getElementById('t-actual-val').textContent = `${reporte.porcentajeRiesgoActual}%`;
+
+      const diffEl = document.getElementById('t-diff-val');
+      const diff = analisis.diferenciaPuntos;
+      diffEl.textContent = `${diff > 0 ? '+' : ''}${diff} pts`;
+      diffEl.style.color = diff < 0 ? '#34d399' : (diff > 0 ? '#ef4444' : '#f59e0b');
+    }
+
+    function actualizarMetricas() {
+      const total = listaPagos.length;
+      let aprobados = 0;
+      let retenidos = 0;
+      let errores = 0;
+      let desembolso = 0;
+      let retenciones = 0;
+
+      for (const p of listaPagos) {
+        const est = String(p.estadoPago || '');
+        if (est.startsWith('APROBADO')) {
+          aprobados++;
+          desembolso += Number(p.detallesFiscales?.montoNeto ?? p.montoNeto ?? p.montoBruto ?? 0);
+          retenciones += Number(p.detallesFiscales?.retencionAplicada ?? p.retencion ?? 0);
+        } else if (est.includes('RETENIDO')) {
+          retenidos++;
+        } else if (est.includes('ERROR') || est.includes('REINTENTO')) {
+          errores++;
+        }
+      }
+
+      document.getElementById('m-total').textContent = total;
+      document.getElementById('m-aprobados').textContent = aprobados;
+      document.getElementById('m-retenidos').textContent = retenidos;
+      document.getElementById('m-errores').textContent = errores;
+      document.getElementById('m-desembolso').textContent = `$${desembolso.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('m-retenciones').textContent = `$${retenciones.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    }
+
+    // Ejecutar Motor POO + Reto 4 en Vivo
+    document.getElementById('btn-evaluar-poo').addEventListener('click', async () => {
+      mostrarToast('⚡ Ejecutando Motor POO y calculando tendencia temporal (Reto 4)...');
+      
+      try {
+        const itemsEvaluados = [];
+
+        for (const item of listaPagos) {
+          let haciendaRes = null;
+          if (item.cedulaJuridica && String(item.cedulaJuridica).length >= 9) {
+            try {
+              const hFetch = await fetch(`https://api.hacienda.go.cr/fe/ae?identificacion=${item.cedulaJuridica}`);
+              if (hFetch.ok) haciendaRes = await hFetch.json();
+              else haciendaRes = { code: hFetch.status, status: await hFetch.text() };
+            } catch(e) {
+              haciendaRes = { error: e.message };
+            }
+          }
+
+          const prov = new Proveedor({
+            cedula: item.cedulaJuridica,
+            nombre: item.proveedorNombre,
+            haciendaResponse: haciendaRes
+          });
+
+          const pago = new PagoProveedor({
+            id: item.id,
+            proveedor: prov,
+            montoBruto: item.montoBruto,
+            moneda: item.moneda,
+            fechaEmision: item.fechaEmision,
+            fechaVencimiento: item.fechaVencimiento,
+            estadoPago: item.estadoPago
+          });
+
+          pago.evaluarDictamenPago();
+          const payload = pago.toUpdatePayload();
+          itemsEvaluados.push(payload);
+
+          await fetch(`http://localhost:3000/pagos_pendientes/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        // Evaluar Reto 4 (HistorialTendencia)
+        const analizador = new HistorialTendencia(listaHistorial, itemsEvaluados);
+        const reporte = analizador.generarReporteYConclusion();
+
+        // Guardar nuevo registro histórico en JSON Server
+        await fetch('http://localhost:3000/historial_ejecuciones', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reporte.registroHistorialActual)
+        });
+
+        mostrarToast(`✔ Corrida guardada: Tendencia ${reporte.estadoTendencia}`);
+        await cargarDatos();
+      } catch (err) {
+        mostrarToast(`❌ Error: ${err.message}`);
+      }
+    });
+
+    // Reiniciar base de datos
+    document.getElementById('btn-reset-db').addEventListener('click', async () => {
+      mostrarToast('🔄 Restableciendo pagos a PENDIENTE...');
+      try {
+        for (const item of listaPagos) {
+          await fetch(`http://localhost:3000/pagos_pendientes/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              estadoPago: 'PENDIENTE',
+              nivelRiesgo: null,
+              comprobanteQRUrl: null,
+              observaciones: null,
+              detallesFiscales: null
+            })
+          });
+        }
+        await cargarDatos();
+        mostrarToast('✔ Base de datos reiniciada.');
+      } catch(e) {
+        mostrarToast('❌ Error al reiniciar.');
+      }
+    });
+
+    // Pestañas
+    const tabPagos = document.getElementById('tab-pagos');
+    const tabHistorial = document.getElementById('tab-historial');
+    const cPagos = document.getElementById('container-pagos');
+    const cHistorial = document.getElementById('container-historial');
+
+    tabPagos.addEventListener('click', () => {
+      tabPagos.classList.add('active');
+      tabHistorial.classList.remove('active');
+      cPagos.style.display = 'block';
+      cHistorial.style.display = 'none';
+    });
+
+    tabHistorial.addEventListener('click', () => {
+      tabHistorial.classList.add('active');
+      tabPagos.classList.remove('active');
+      cHistorial.style.display = 'block';
+      cPagos.style.display = 'none';
+    });
+
+    // Modal
+    document.getElementById('modal-close-btn').addEventListener('click', () => qrModal.classList.remove('open'));
+    qrModal.addEventListener('click', (e) => { if (e.target === qrModal) qrModal.classList.remove('open'); });
+
+    cargarDatos();
+  </script>
+</body>
+</html>
